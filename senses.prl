@@ -11,19 +11,40 @@ my $filename = "interest.acl94.txt";
 open(my $lines, '<:encoding(UTF-8)', $filename)
     or die "Could not open file '$filename' $!";
 
+# Open new file for writting to
 open(my $tofile, '>', 'interest.arff');
 
-# while (my $line = <$lines>) {
-#   chomp $line;
-#   print "$line\n";
-# }
-# print "done\n";
+# Attributs
+my $prevword_2;
+my $prevword_1;
+my $nextword_1;
+my $nextword_2;
+my $prevtag_2;
+my $prevtag_1;
+my $nexttag_1;
+my $nexttag_2;
+my @senses = ("'readiness to give attention'",
+              "'quality of causing attention to be given to'",
+              "'activity, etc. that one gives attention to'",
+              "'advantage, advancement or favor'",
+              "'a share in a company or business'",
+              "'money paid for the use of money'");
 
-# foreach my $line2 (<$lines>) {
-#     chomp $line2;
-#     print "$line2\n";
-# }
-# print "done2\n";
+# .arff file header
+my $header = "% File: interest.arff\n\n";
+$header .= "\@relation interest\n\n";
+$header .= "\@attribute prevword_2 string\n";
+$header .= "\@attribute prevword_1 string\n";
+$header .= "\@attribute nextword_1 string\n";
+$header .= "\@attribute nextword_2 string\n";
+$header .= "\@attribute prevtag_2 string\n";
+$header .= "\@attribute prevtag_1 string\n";
+$header .= "\@attribute nexttag_1 string\n";
+$header .= "\@attribute nexttag_2 string\n";
+$header .= "\@attribute senses {$senses[0], $senses[1], $senses[2], $senses[3], $senses[4], $senses[5]}\n\n";
+$header .= "\@data\n";
+print $tofile "$header \n";
+
 #my @lines = <STDIN>;   # Slurp in entire file; use only for small files!
 my $linenum = 0;
 
@@ -37,25 +58,27 @@ foreach my $line (<$lines>) {
 
     my @words;
     my @tags;
-    my @pairs = 0; #
 
-    # Debug :
-    chomp $line;
-    print "$line\n";
-    print "$linenum\n";
+    #
+    my @pairs;
+    my @tuple;
+    my @interest;
 
     # Clean up line formatting, e.g. get rid of brackets, ====
     #...
     # La documentation regex : https://www.tutorialspoint.com/perl/perl_regular_expressions.htm
-    $line =~ tr/=[]//d;
+    $line =~ tr/=[]//d; # tr - translate, d - delete
+    $line =~ s/^\s+//; # replace empty space at the beginning of the line
 
     # Convert plural to singular for interest(s), lose underscore in sense labels
     # since WEKA doesn't like punctuation in its data items
     # e.g. interests_6 becomes interest6
     #...
-    $line =~ s/interests/interest/g;
-    $line =~ s/interest_/interest/g;
+    $line =~ s/interests/interest/g; # s - substitution
+    $line =~ s/interest_/interest/g; # g - replaces all occurrences of the found expression with the replacement text.
+    $line =~ s/\s+/ /g; # replace 2 or more empty spaces by one empty space
 
+    @pairs = split / /, $line; # split line of string text into array of pairs
 
     # Get word/tag pairs
     for ($i = 0; $i < @pairs; ++$i)
@@ -67,6 +90,8 @@ foreach my $line (<$lines>) {
         # Except %, which turns into PERCENT (worth keeping for this problem!)
 
         #...
+        # $pairs[$i] =~ s/([^\d\W])([.!:?;(){}'])/$1X/g; # replace punctuation in words by X
+        $pairs[$i] =~ s/(\w)(%)/$1PERCENT/g; # replace dot in words by X
 
         # (For optional experiment with coarser sense distinctions)
         # Collapse interest1...interest4   to interestA (interest=caring about)
@@ -74,6 +99,10 @@ foreach my $line (<$lines>) {
 
         #...
     }
+
+    @words = @pairs;
+    #print "WORDS = @words\n";
+    $line = join(" ", @pairs); # recombine pairs to line string
 
     # Go through this sentence
     for ($i = 0; $i < @pairs; ++$i)
@@ -85,6 +114,78 @@ foreach my $line (<$lines>) {
             # Let nextword, nexttag = NULL if interest is last  word in sentence
 
             #...
+            
+
+            if (!$words[$i-1])
+            {
+                $prevword_2 = "NULL";
+                $prevword_1 = "NULL";
+                $prevtag_2 = "NULL";
+                $prevtag_1 = "NULL";
+            }
+            elsif (!$words[$i-2])
+            {
+                $prevword_2 = "NULL";
+                $prevtag_2 = "NULL";
+
+                @tuple = split /\//, $words[$i-1];
+                if (!$tuple[1]) {$tuple[1] = "?";}
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
+                $prevword_1 = $tuple[0];
+                $prevtag_1  = $tuple[1];
+            }
+            else 
+            {
+                @tuple = split /\//, $words[$i-1];
+                if (!$tuple[1]) {$tuple[1] = "?";}  
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}            
+                $prevword_1 = $tuple[0];
+                $prevtag_1  = $tuple[1];
+
+                @tuple = split /\//, $words[$i-2];
+                if (!$tuple[1]) {$tuple[1] = "?";}
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
+                $prevword_2 = $tuple[0];
+                $prevtag_2  = $tuple[1];
+                
+            }
+
+            if (!$words[$i+1])
+            {
+                $nextword_2 = "NULL";
+                $nextword_1 = "NULL";
+                $nexttag_2 = "NULL";
+                $nexttag_1 = "NULL";
+            }
+            elsif (!$words[$i+2])
+            {
+                $nextword_2 = "NULL";
+                $nexttag_2 = "NULL";
+
+                @tuple = split /\//, $words[$i+1];
+                if (!$tuple[1]) {$tuple[1] = "?";}
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
+                $nextword_1 = $tuple[0];
+                $nexttag_1  = $tuple[1];
+            }
+            else 
+            {
+                @tuple = split /\//, $words[$i+1];
+                if (!$tuple[1]) {$tuple[1] = "?";}
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
+                $nextword_1 = $tuple[0];
+                $nexttag_1  = $tuple[1];
+
+                @tuple = split /\//, $words[$i+2];
+                if (!$tuple[1]) {$tuple[1] = "?";}
+                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
+                $nextword_2 = $tuple[0];
+                $nexttag_2  = $tuple[1];
+            }
+
+            @interest = split /\//, $words[$i];
+            @interest = split //, $interest[0];
+
         }
         else
         {
@@ -96,7 +197,9 @@ foreach my $line (<$lines>) {
         }
     }
 
-    print $tofile "$line \n";
+    print $tofile "$prevword_2, $prevword_1, $nextword_1, $nextword_2, $prevtag_2, $prevtag_1, $nexttag_1, $nexttag_2, $senses[$interest[-1]-1]\n";
+    # Alternative:
+    #print $tofile "$prevword_2, $prevword_1, $nextword_1, $nextword_2, $prevtag_2, $prevtag_1, $nexttag_1, $nexttag_2, $interest[-1]\n";
 
     ++$linenum;
 }
