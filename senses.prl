@@ -1,28 +1,32 @@
 #!/usr/bin/perl
 #
 # Convert interest.acl94.txt into interest.arff
-# [Skeleton for code, showing most of the relevant "gotchas"]
-# print "Hello World!";
 
 use strict;
 use warnings;
 
-my $filename = "interest.acl94.txt";
-open(my $lines, '<:encoding(UTF-8)', $filename)
+# Choose a nGram value (0 to infinity):
+my $ngram = 2;   # The nGram
+my $count;       # gram counter
+
+my $linenum = 0; # phrase counting
+my @interest;    # array of interest meanings
+my @word_tag;    # word/tag pair
+my @pairs;       # all word/tag pairs from a phrase
+my $filename = "interest.acl94.txt"; # file that contains all phrases in syntactic style
+my $lines;       # all phrases in the file
+my $tofile;      # the .arff file for writting to
+
+open($lines, '<:encoding(UTF-8)', $filename)
     or die "Could not open file '$filename' $!";
 
-# Open new file for writting to
-open(my $tofile, '>', 'interest.arff');
+open($tofile, '>', 'interest.arff');
 
 # Attributs
-my $prevword_2;
-my $prevword_1;
-my $nextword_1;
-my $nextword_2;
-my $prevtag_2;
-my $prevtag_1;
-my $nexttag_1;
-my $nexttag_2;
+my $prevwords;
+my $nextwords;
+my $prevtags;
+my $nexttags;
 my @senses = ("'readiness to give attention'",
               "'quality of causing attention to be given to'",
               "'activity, etc. that one gives attention to'",
@@ -30,68 +34,66 @@ my @senses = ("'readiness to give attention'",
               "'a share in a company or business'",
               "'money paid for the use of money'");
 
-# .arff file header
-my $header = "% File: interest.arff\n\n";
-$header .= "\@relation interest\n\n";
-$header .= "\@attribute prevword_2 string\n";
-$header .= "\@attribute prevword_1 string\n";
-$header .= "\@attribute nextword_1 string\n";
-$header .= "\@attribute nextword_2 string\n";
-$header .= "\@attribute prevtag_2 string\n";
-$header .= "\@attribute prevtag_1 string\n";
-$header .= "\@attribute nexttag_1 string\n";
-$header .= "\@attribute nexttag_2 string\n";
-$header .= "\@attribute senses {$senses[0], $senses[1], $senses[2], $senses[3], $senses[4], $senses[5]}\n\n";
-$header .= "\@data\n";
+# The .arff file header
+my $header = "% File: interest.arff\n% by Dorin Diaconu, Georgiy Gegiya\n\n";
+$header .= "\@RELATION interest\n\n";
+$header .= "\@ATTRIBUTE prevwords string\n";
+$header .= "\@ATTRIBUTE nextwords string\n";
+$header .= "\@ATTRIBUTE prevtags string\n";
+$header .= "\@ATTRIBUTE nexttags string\n";
+$header .= "\@ATTRIBUTE senses {$senses[0], $senses[1], $senses[2], $senses[3], $senses[4], $senses[5]}\n\n";
+$header .= "\@DATA\n";
 print $tofile "$header \n";
 
-#my @lines = <STDIN>;   # Slurp in entire file; use only for small files!
-my $linenum = 0;
+# Create an array of stopwords
+my $stopwords = stopword();
 
-my $i = 0; #
 
-#foreach my $line (@lines) {
-foreach my $line (<$lines>) {
-    
+# Loop thru every phrase
+foreach my $line (<$lines>) 
+{
     # Ignore $$ separator lines
     next if ($line =~ /^\s*\$\$\s*$/);
-
-    my @words;
-    my @tags;
-
-    #
-    my @pairs;
-    my @tuple;
-    my @interest;
-
-    # Clean up line formatting, e.g. get rid of brackets, ====
-    #...
-    # La documentation regex : https://www.tutorialspoint.com/perl/perl_regular_expressions.htm
-    $line =~ tr/=[]//d; # tr - translate, d - delete
-    $line =~ s/^\s+//; # replace empty space at the beginning of the line
 
     # Convert plural to singular for interest(s), lose underscore in sense labels
     # since WEKA doesn't like punctuation in its data items
     # e.g. interests_6 becomes interest6
-    #...
+    # Get rid of brackets, ====
+    $line =~ tr/=[]//d; # tr - translate, d - delete
     $line =~ s/interests/interest/g; # s - substitution
     $line =~ s/interest_/interest/g; # g - replaces all occurrences of the found expression with the replacement text.
-    $line =~ s/\s+/ /g; # replace 2 or more empty spaces by one empty space
+    $line =~ s/(\.\/\.)//g; # remove dots
+    $line =~ s/(\,\/\,)//g; # remove commas
+    $line =~ s/''\/''//g; 
+    $line =~ s/``\/``//g;
+    $line =~ s/\{\/\(//g;
+    $line =~ s/\}\/\)//g;
+    $line =~ s/\(\/\(//g;
+    $line =~ s/\)\/\)//g;
+    $line =~ s/ \/\)//g;
+    $line =~ s/[\W\D]\/://g;
+
+    # Clean-up for empty spaces
+    $line =~ s/^\s+//; # replace empty space at the beginning of the line
+    $line =~ s/\s+/ /g; # replace 2 or more empty spaces by one
 
     @pairs = split / /, $line; # split line of string text into array of pairs
 
-    # Get word/tag pairs
-    for ($i = 0; $i < @pairs; ++$i)
+    # Make some replacements
+    for (my $i = 0; $i < @pairs; ++$i)
     {
-        #...
-
         # Replace all punctuation within values with X, since WEKA doesn't like punctuation
         # (e.g. u.s. becomes uXsX)
         # Except %, which turns into PERCENT (worth keeping for this problem!)
-
-        #...
-        # $pairs[$i] =~ s/([^\d\W])([.!:?;(){}'])/$1X/g; # replace punctuation in words by X
-        $pairs[$i] =~ s/(\w)(%)/$1PERCENT/g; # replace dot in words by X
+        $pairs[$i] =~ s/'/X/g;                # replace ' by X
+        $pairs[$i] =~ s/&/AND/g;              # replace & by AND
+        $pairs[$i] =~ s/--/-/g;               # -- by -
+        $pairs[$i] =~ s/PP\$/PP/g;            # PP$ by PP
+        $pairs[$i] =~ s/WP\$/WP/g;            # WP$ by WP
+        $pairs[$i] =~ s/\$\/\$/\$\/NN/g;      # $/$ by $/NN
+        $pairs[$i] =~ s/\%\/\%/\%\/NN/g;      # %/% by %/NN
+        $pairs[$i] =~ s/\#\/\#/\#\/NN/g;      # #/# by #/NN
+        $pairs[$i] =~ s/([\d\w])(\.)/$1X/g;   # punctuation in words and digits by X
 
         # (For optional experiment with coarser sense distinctions)
         # Collapse interest1...interest4   to interestA (interest=caring about)
@@ -100,95 +102,80 @@ foreach my $line (<$lines>) {
         #...
     }
 
-    @words = @pairs;
-    #print "WORDS = @words\n";
     $line = join(" ", @pairs); # recombine pairs to line string
 
+    my @prevwordsArray;
+    my @prevtagsArray;
+    my @nextwordsArray;
+    my @nexttagsArray;
+
     # Go through this sentence
-    for ($i = 0; $i < @pairs; ++$i)
+    for (my $i = 0; $i < @pairs; ++$i)
     {
-        if ($words[$i] =~ /^interest[0-9AB]/)
+        if ($pairs[$i] =~ /^interest[0-9AB]/) # pivot
         {
-            # This is the target word position.  Record features around it for this sentence.
+            # UNUSED :
+            # This is the target word position. Record features around it for this sentence.
             # Let prevword, prevtag = NULL if interest is first word in sentence
             # Let nextword, nexttag = NULL if interest is last  word in sentence
 
-            #...
-            
+            # Reset counter
+            $count = 0;
 
-            if (!$words[$i-1])
+            # Collecting prevwords & prevtags:
+            for (my $j = $i-1; $j > -1; $j--)
             {
-                $prevword_2 = "NULL";
-                $prevword_1 = "NULL";
-                $prevtag_2 = "NULL";
-                $prevtag_1 = "NULL";
+                @word_tag = split /\//, $pairs[$j];
+
+                # Avoid stopwords
+                if ($stopwords =~ /\Q$word_tag[0]/) { # \Q to autoescape problematic character
+                    next; # passing to the next iteration
+                }
+
+                # Respecting the nGram
+                if ($count == $ngram) { last; } # breaking loop
+                $count++;
+
+                # Checking for bad word/tag structure
+                if (!$word_tag[0]) {$word_tag[0] = "?";}
+                if (!$word_tag[1]) {$word_tag[1] = "?";}
+
+                push @prevwordsArray, $word_tag[0]; # append word to the @prevwords array
+                push @prevtagsArray,  $word_tag[1]; # append tag
             }
-            elsif (!$words[$i-2])
-            {
-                $prevword_2 = "NULL";
-                $prevtag_2 = "NULL";
 
-                @tuple = split /\//, $words[$i-1];
-                if (!$tuple[1]) {$tuple[1] = "?";}
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
-                $prevword_1 = $tuple[0];
-                $prevtag_1  = $tuple[1];
-            }
-            else 
-            {
-                @tuple = split /\//, $words[$i-1];
-                if (!$tuple[1]) {$tuple[1] = "?";}  
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}            
-                $prevword_1 = $tuple[0];
-                $prevtag_1  = $tuple[1];
+            # Reset counter
+            $count = 0;
 
-                @tuple = split /\//, $words[$i-2];
-                if (!$tuple[1]) {$tuple[1] = "?";}
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
-                $prevword_2 = $tuple[0];
-                $prevtag_2  = $tuple[1];
+            # Collecting nextwords & nexttags:
+            for (my $j = $i+1; $j < @pairs; $j++)
+            {
+                @word_tag = split /\//, $pairs[$j];
+
+                # Avoid stopwords
+                if ($stopwords =~ /\Q$word_tag[0]/) { # \Q to autoescape problematic character
+                    next; # passing to the next iteration
+                }
+
+                # Respecting the nGram
+                if ($count == $ngram) { last; } # breaking loop
+                $count++;
                 
+                # Checking for bad word/tag structure
+                if (!$word_tag[0]) {$word_tag[0] = "?";}
+                if (!$word_tag[1]) {$word_tag[1] = "?";}
+
+                push @nextwordsArray, $word_tag[0]; # append word to the @nextwords array
+                push @nexttagsArray,  $word_tag[1]; # append tag
             }
 
-            if (!$words[$i+1])
-            {
-                $nextword_2 = "NULL";
-                $nextword_1 = "NULL";
-                $nexttag_2 = "NULL";
-                $nexttag_1 = "NULL";
-            }
-            elsif (!$words[$i+2])
-            {
-                $nextword_2 = "NULL";
-                $nexttag_2 = "NULL";
-
-                @tuple = split /\//, $words[$i+1];
-                if (!$tuple[1]) {$tuple[1] = "?";}
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
-                $nextword_1 = $tuple[0];
-                $nexttag_1  = $tuple[1];
-            }
-            else 
-            {
-                @tuple = split /\//, $words[$i+1];
-                if (!$tuple[1]) {$tuple[1] = "?";}
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
-                $nextword_1 = $tuple[0];
-                $nexttag_1  = $tuple[1];
-
-                @tuple = split /\//, $words[$i+2];
-                if (!$tuple[1]) {$tuple[1] = "?";}
-                if ($tuple[0] =~ /\W/) {$tuple[0] = $tuple[1] = 'NULL';}
-                $nextword_2 = $tuple[0];
-                $nexttag_2  = $tuple[1];
-            }
-
-            @interest = split /\//, $words[$i];
+            # Recovery interest sense from @pairs array
+            @interest = split /\//, $pairs[$i];
             @interest = split //, $interest[0];
-
         }
         else
         {
+            # UNUSED :
             # For other non-target words, just record the word and tag as having occurred,
             # since we will need to include them in the lists of values for this nominal
             # @attribute in the header.
@@ -197,22 +184,37 @@ foreach my $line (<$lines>) {
         }
     }
 
-    print $tofile "$prevword_2, $prevword_1, $nextword_1, $nextword_2, $prevtag_2, $prevtag_1, $nexttag_1, $nexttag_2, $senses[$interest[-1]-1]\n";
-    # Alternative:
-    #print $tofile "$prevword_2, $prevword_1, $nextword_1, $nextword_2, $prevtag_2, $prevtag_1, $nexttag_1, $nexttag_2, $interest[-1]\n";
+    $prevwords = join(" ", @prevwordsArray);
+    $prevtags  = join(" ", @prevtagsArray);
+    $nextwords = join(" ", @nextwordsArray);
+    $nexttags  = join(" ", @nexttagsArray);
+
+    # Write one line of values into the .arff file
+    print $tofile "'$prevwords', '$nextwords', '$prevtags', '$nexttags', $senses[$interest[-1]-1]\n";
 
     ++$linenum;
 }
 
+close $lines;
+close $tofile;
+
+# UNUSED :
 # Build nominal attribute value lists containing recorded words (for prevword,nextword)
 # and tags (for prevtag, nexttag)
 
-#...
 
-# Output .arff format (header, then one line of attributes and class for each sentence )
+# Return an string with stopwords
+sub stopword 
+{
+    my $stopwords;
+    my $filename = "stoplist-english.txt";
 
-close $tofile;
-#...
+    open(my $lines, '<:encoding(UTF-8)', $filename)
+        or die "Could not open file '$filename' $!";
 
+    $stopwords = join("", <$lines>);
 
+    close $lines;
 
+    return $stopwords;
+}
