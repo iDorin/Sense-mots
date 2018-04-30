@@ -72,7 +72,7 @@ sub make_arff
     $header .= "\@ATTRIBUTE nextwords string\n";
     $header .= "\@ATTRIBUTE prevtags string\n";
     $header .= "\@ATTRIBUTE nexttags string\n";
-    $header .= "\@ATTRIBUTE senses {$senses[0], $senses[1], $senses[2], $senses[3], $senses[4], $senses[5]}\n\n";
+    $header .= "\@ATTRIBUTE class_senses {$senses[0], $senses[1], $senses[2], $senses[3], $senses[4], $senses[5]}\n\n";
     $header .= "\@DATA\n";
     print $tofile "$header \n";
 
@@ -145,11 +145,6 @@ sub make_arff
         {
             if ($pairs[$i] =~ /^interest[0-9AB]/) # pivot
             {
-                # UNUSED :
-                # This is the target word position. Record features around it for this sentence.
-                # Let prevword, prevtag = NULL if interest is first word in sentence
-                # Let nextword, nexttag = NULL if interest is last  word in sentence
-
                 # Reset counter
                 $count = 0;
 
@@ -204,15 +199,6 @@ sub make_arff
                 @interest = split /\//, $pairs[$i];
                 @interest = split //, $interest[0];
             }
-            else
-            {
-                # UNUSED :
-                # For other non-target words, just record the word and tag as having occurred,
-                # since we will need to include them in the lists of values for this nominal
-                # @attribute in the header.
-
-                #...
-            }
         }
 
         $prevwords = join(" ", @prevwordsArray);
@@ -230,11 +216,6 @@ sub make_arff
     close $tofile;
 
 }
-
-
-# UNUSED :
-# Build nominal attribute value lists containing recorded words (for prevword,nextword)
-# and tags (for prevtag, nexttag)
 
 
 # Return an string with stopwords

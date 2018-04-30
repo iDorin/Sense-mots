@@ -7,7 +7,7 @@
 @ATTRIBUTE nextwords string
 @ATTRIBUTE prevtags string
 @ATTRIBUTE nexttags string
-@ATTRIBUTE senses {'readiness to give attention', 'quality of causing attention to be given to', 'activity, etc. that one gives attention to', 'advantage, advancement or favor', 'a share in a company or business', 'money paid for the use of money'}
+@ATTRIBUTE class_senses {'readiness to give attention', 'quality of causing attention to be given to', 'activity, etc. that one gives attention to', 'advantage, advancement or favor', 'a share in a company or business', 'money paid for the use of money'}
 
 @DATA
  
