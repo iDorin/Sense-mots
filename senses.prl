@@ -19,9 +19,6 @@ make_arff();
 $ngram = 3;
 make_arff();
 
-$ngram = 4;
-make_arff();
-
 $ngram = 10000;
 make_arff();
 
@@ -201,8 +198,8 @@ sub make_arff
             }
         }
 
-        $prevwords = join(" ", @prevwordsArray);
-        $prevtags  = join(" ", @prevtagsArray);
+        $prevwords = join(" ", reverse @prevwordsArray);
+        $prevtags  = join(" ", reverse @prevtagsArray);
         $nextwords = join(" ", @nextwordsArray);
         $nexttags  = join(" ", @nexttagsArray);
 
